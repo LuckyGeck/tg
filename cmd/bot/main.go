@@ -45,33 +45,43 @@ func accept(bot *tgapi.BotAPI, upd tgapi.Update) {
 		return
 	}
 
-	var x, y int
-	if _, err := fmt.Sscanf(m.Text, "%d %d", &x, &y); err != nil {
+	var w, h int
+	if _, err := fmt.Sscanf(m.Text, "%d %d", &w, &h); err != nil {
 		bot.Send(tgapi.NewMessage(m.Chat.ID, err.Error()))
 		return
 	}
 
-	img := image.NewRGBA(image.Rect(0, 0, x, y))
-	for i := 0; i < x; i++ {
-		for j := 1; j < y; j++ {
-			img.SetRGBA(i, j, color.RGBA{
-				A: 127,
-				R: uint8(i % 100),
-				G: uint8(j % 100),
-				B: uint8((1 + j) % 100),
-			})
+	img, err := samplePng(w, h, func(i, j int) color.RGBA {
+		return color.RGBA{
+			A: 128,
+			R: uint8(i % 100),
+			G: uint8(j % 100),
+			B: uint8((i + j) % 100),
+		}
+	})
+	if err != nil {
+		bot.Send(tgapi.NewMessage(m.Chat.ID, err.Error()))
+		return
+	}
+
+	// Send the image to the user.
+	file := tgapi.FileBytes{Name: "img.png", Bytes: img}
+	msg := tgapi.NewPhotoUpload(m.Chat.ID, file)
+	bot.Send(msg)
+}
+
+func samplePng(w, h int, fn func(i, j int) color.RGBA) ([]byte, error) {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for i := 0; i < w; i++ {
+		for j := 1; j < h; j++ {
+			img.SetRGBA(i, j, fn(i, j))
 		}
 	}
 
 	// Create a png out of img.
 	buf := bytes.NewBuffer(nil)
 	if err := png.Encode(buf, img); err != nil {
-		bot.Send(tgapi.NewMessage(m.Chat.ID, err.Error()))
-		return
+		return nil, err
 	}
-
-	// Send the image to the user.
-	file := tgapi.FileBytes{Name: "img.png", Bytes: buf.Bytes()}
-	msg := tgapi.NewPhotoUpload(m.Chat.ID, file)
-	bot.Send(msg)
+	return buf.Bytes(), nil
 }
